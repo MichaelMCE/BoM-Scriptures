@@ -435,7 +435,7 @@ char const *js_bookHeading (js_t *hJs)
 	
 	json_t const *child;
 	
-	for (child = json_getChild(hJs->json); child != NULL; child = json_getSibling(child)){
+	for (child = json_getChild(hJs->book); child != NULL; child = json_getSibling(child)){
 		jsonType_t propertyType = json_getType(child);
 		//js_processType(child, propertyType);
 
