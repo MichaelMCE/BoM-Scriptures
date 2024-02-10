@@ -1,7 +1,6 @@
 
 /*
-UI developed offline (without Teensy) through uFont for Desktop:
-https://github.com/MichaelMCE/uFont/blob/master/examples/tuner.c
+
 */
 
 
@@ -53,6 +52,8 @@ static uint32_t uiPage = UI_PAGE_STARTUP;
 static const ui_page_t *uiPages;
 
 static dial_t dial1;
+static dial_t dial2;
+static dial_t dial3;
 static timerSS_t timerSS;	// to resignal a render update if for whatever reason current failed
 
 
@@ -64,15 +65,11 @@ static _ufont_t *getFont (const int fontIdx)
 	return &fonts[fontIdx];
 }
 
-static void encReset ()
-{
-	dial1.posNew = 0;
-}
-
 static void ufont_init ()
 {
 	// create a 1BPP work surface. this is the initial work surface
-	surface = fontCreateSurface(DWIDTH, DHEIGHT, COLOUR_24TO16(0xFFBF33), NULL);
+	//surface = fontCreateSurface(DWIDTH, DHEIGHT, COLOUR_24TO16(0xFFBF33), NULL);
+	surface = fontCreateSurface(DWIDTH, DHEIGHT, COLOUR_24TO16(0x111111 * 5), NULL);
 	// This will fail if memory is short, SDCard is unreadable
 	// but more probable, requested font file (.uf) is absent
 	for (int i = 0; i < (int)sizeof(fontfiles) / (int)sizeof(*fontfiles); i++){
@@ -98,7 +95,42 @@ void enc1Update (const int value)
 	}
 }
 
-static void enc1SwCB ()
+void enc2Update (const int value)
+{
+	if (!(value&0x03)){
+		if (value != dial2.pos){
+			dial2.posNew = dial2.pos - value;
+			dial2.pos = value;
+		}
+	}
+}
+
+void enc3Update (const int value)
+{
+	if (!(value&0x03)){
+		if (value != dial3.pos){
+			dial3.posNew = dial3.pos - value;
+			dial3.pos = value;
+		}
+	}
+}
+
+static void enc1Reset ()
+{
+	dial1.posNew = 0;
+}
+
+static void enc2Reset ()
+{
+	dial2.posNew = 0;
+}
+
+static void enc3Reset ()
+{
+	dial3.posNew = 0;
+}
+
+void enc1SwCB ()
 {
 	static int lastPressTime;
 	
@@ -109,12 +141,26 @@ static void enc1SwCB ()
 	}
 }
 
-void pins_init ()
+void enc2SwCB ()
 {
-	pinMode(LED_BUILTIN, OUTPUT);
+	static int lastPressTime;
 	
-	pinMode(ENCODER_PIN_SW, INPUT_PULLUP);
-	attachInterrupt(ENCODER_PIN_SW, enc1SwCB, FALLING);
+	int currentPressTime = millis();
+	if (currentPressTime - lastPressTime > 400){
+		lastPressTime = currentPressTime;
+		dial2.swChange = 1;
+	}
+}
+
+void enc3SwCB ()
+{
+	static int lastPressTime;
+	
+	int currentPressTime = millis();
+	if (currentPressTime - lastPressTime > 400){
+		lastPressTime = currentPressTime;
+		dial3.swChange = 1;
+	}
 }
 
 void dials_init ()
@@ -122,7 +168,31 @@ void dials_init ()
 	dial1.pos = -1;
 	dial1.posNew = 0;
 	dial1.swChange = 0;
-	dial1.enc = new Encoder(ENCODER_PIN_CLK, ENCODER_PIN_DT, enc1Update);
+	dial1.enc = new Encoder(ENCODER1_PIN_CLK, ENCODER1_PIN_DT, enc1Update);
+	
+	dial2.pos = -1;
+	dial2.posNew = 0;
+	dial2.swChange = 0;
+	dial2.enc = new Encoder(ENCODER2_PIN_CLK, ENCODER2_PIN_DT, enc2Update);
+	
+	dial3.pos = -1;
+	dial3.posNew = 0;
+	dial3.swChange = 0;
+	dial3.enc = new Encoder(ENCODER3_PIN_CLK, ENCODER3_PIN_DT, enc3Update);
+}
+
+void pins_init ()
+{
+	pinMode(LED_BUILTIN, OUTPUT);
+	
+	pinMode(ENCODER1_PIN_SW, INPUT_PULLUP);
+	attachInterrupt(ENCODER1_PIN_SW, enc1SwCB, FALLING);
+
+	pinMode(ENCODER2_PIN_SW, INPUT_PULLUP);
+	attachInterrupt(ENCODER2_PIN_SW, enc2SwCB, FALLING);
+	
+	pinMode(ENCODER3_PIN_SW, INPUT_PULLUP);
+	attachInterrupt(ENCODER3_PIN_SW, enc3SwCB, FALLING);
 }
 
 int drawMain (js_t *hJs, const int book, const int chapter, const int verse)
@@ -178,7 +248,7 @@ int drawMain (js_t *hJs, const int book, const int chapter, const int verse)
 		if (js_openVerse(hJs, verse)){
 			char const *verse = js_verseGet(hJs);
 			if (verse){
-				x = 0;
+				x = 2;
 				y += height;
 				success = fontPrint8(getFont(FONT24), &x, &y, (uint8_t*)verse);
 			}
@@ -234,7 +304,6 @@ static void timerSSUpdate_task ()
 			timerSSUpdate_fire();
 	}
 }
-
 
 void sceneStartupEnter (void *opaque)
 {
@@ -345,7 +414,7 @@ static void sceneRender (void *opaque)
 	//delay(1);
 	
 	fontCleanSurface(NULL, surface);
-	tft_clearBuffer(COLOUR_BLACK);
+	tft_clearBuffer(COLOUR_CREAM);
 	uiViewRender(opaque);
 	tft_update();
 	
@@ -361,47 +430,55 @@ static int uiDispatchMessage (const int eventId, uint32_t data1Uint32, int32_t d
 int startupEnc1Change (void *opaque, const int direction)
 {
 	ui_opaque_info *info = (ui_opaque_info*)opaque;
-	
-	if (info->flagSw1Ctrl == 3){		// verse
-		if (direction < 0){
-			if (info->verse > 1)
-				info->verse--;
-		}else{
-			int verse = info->verse + 1;
-			if (verse <= allbooks[info->book].verses[info->chapter])
-				info->verse = verse;
-		}
-	}else if (info->flagSw1Ctrl == 2){	// chapter
-		if (direction < 0){
-			if (info->chapter > 1)
-				info->chapter--;
-			
-		}else{
-			int chapter = info->chapter + 1;
-			if (chapter <= allbooks[info->book].chapters)
-				info->chapter = chapter;
-		}
-	}else if (info->flagSw1Ctrl == 1){	// book
-		if (direction < 0){
-			if (info->book > 0)
-				info->book--;
-		}else{
-			const int totalBooks = sizeof(allbooks) / sizeof(*allbooks);
-			if (++info->book > totalBooks-1)
-				info->book = totalBooks-1;
-		}	
+		
+	if (direction < 0){
+		if (info->book > 0)
+			info->book--;
+	}else{
+		const int totalBooks = sizeof(allbooks) / sizeof(*allbooks);
+		if (++info->book > totalBooks-1)
+			info->book = totalBooks-1;
+	}	
 
-		js_closeBook(info->hJs);
-		js_openBook(info->hJs, allbooks[info->book].name);
-		info->chapter = 1;
-		info->verse = 1;
-	}
-	
-	//printf("booksChapters %i, info->flagSw1Ctrl %i, direction %i, info->book %i, info->chapter %i, info->verse %i\n", allbooks[info->book].verses[info->chapter], info->flagSw1Ctrl, direction, info->book, info->chapter, info->verse);
+	js_closeBook(info->hJs);
+	js_openBook(info->hJs, allbooks[info->book].name);
+	info->chapter = 1;
+	info->verse = 1;
+
 	return 1;
 }
 
-static void startupSw1Change (void *opaque, const int direction)
+int startupEnc2Change (void *opaque, const int direction)
+{
+	ui_opaque_info *info = (ui_opaque_info*)opaque;
+	
+	if (direction < 0){
+		if (info->chapter > 1)
+			info->chapter--;
+	}else{
+		int chapter = info->chapter + 1;
+		if (chapter <= allbooks[info->book].chapters)
+			info->chapter = chapter;
+	}
+	return 1;
+}
+
+int startupEnc3Change (void *opaque, const int direction)
+{
+	ui_opaque_info *info = (ui_opaque_info*)opaque;
+	
+	if (direction < 0){
+		if (info->verse > 1)
+			info->verse--;
+	}else{
+		int verse = info->verse + 1;
+		if (verse <= allbooks[info->book].verses[info->chapter])
+			info->verse = verse;
+	}
+	return 1;
+}
+
+void startupSw1Change (void *opaque, const int direction)
 {
 	ui_opaque_info *info = (ui_opaque_info*)uiGetOpaque(UI_PAGE_STARTUP);
 		
@@ -414,11 +491,14 @@ int uiEventCB (const int eventId, void *opaque, uint32_t data1uint32, int32_t da
 {
 	switch (eventId){
 	  case UI_EVENT_ROTARY:
-	    if (data2Int32 != IN_ROTARY_1) break;
-
 		if (uiGetView() == UI_PAGE_STARTUP){
 			//ui_opaque_info *info = (ui_opaque_info*)opaque;
-			return startupEnc1Change(opaque, data3Flt);
+			if (data2Int32 == IN_ROTARY_1)
+				return startupEnc1Change(opaque, data3Flt);
+			else if (data2Int32 == IN_ROTARY_2)
+				return startupEnc2Change(opaque, data3Flt);
+			else if (data2Int32 == IN_ROTARY_3)
+				return startupEnc3Change(opaque, data3Flt);
 		}
 		break;
 	  case UI_EVENT_BUTTON:
@@ -426,7 +506,7 @@ int uiEventCB (const int eventId, void *opaque, uint32_t data1uint32, int32_t da
 			/*uiDispatchMessage(UI_EVENT_PAGE_EXT, 0, 0, 0.0f);
 			uiDispatchMessage(UI_EVENT_PAGE_NXT, 0, 0, 0.0f);
 			uiDispatchMessage(UI_EVENT_PAGE_ENT, 0, 0, 0.0f);*/
-			startupSw1Change(opaque, data3Flt);
+			//startupSw1Change(opaque, data3Flt);
 	    	return 1;
 	    }
 		break;
@@ -481,10 +561,11 @@ void setup ()
 void loop ()
 {
 
+	// Rotary 1
 	if (dial1.posNew){
 		if (uiDispatchMessage(UI_EVENT_ROTARY, 0, IN_ROTARY_1, dial1.posNew))
 			sceneUpdate();
-		encReset();
+		enc1Reset();
 	}
 
 	if (dial1.swChange){
@@ -493,6 +574,32 @@ void loop ()
 		dial1.swChange = 0;
 	}
 
+	// Rotary 2
+	if (dial2.posNew){
+		if (uiDispatchMessage(UI_EVENT_ROTARY, 0, IN_ROTARY_2, dial2.posNew))
+			sceneUpdate();
+		enc2Reset();
+	}
+
+	if (dial2.swChange){
+		if (uiDispatchMessage(UI_EVENT_BUTTON, 0, IN_SWITCH_2, dial2.swChange))
+			sceneUpdate();
+		dial2.swChange = 0;
+	}
+	
+	// Rotary 3
+	if (dial3.posNew){
+		if (uiDispatchMessage(UI_EVENT_ROTARY, 0, IN_ROTARY_3, dial3.posNew))
+			sceneUpdate();
+		enc3Reset();
+	}
+
+	if (dial3.swChange){
+		if (uiDispatchMessage(UI_EVENT_BUTTON, 0, IN_SWITCH_3, dial3.swChange))
+			sceneUpdate();
+		dial3.swChange = 0;
+	}
+	
 	if (uiDispatchMessage(UI_EVENT_TICK, 0, 0, 0.0f))
 		sceneUpdate();
 
