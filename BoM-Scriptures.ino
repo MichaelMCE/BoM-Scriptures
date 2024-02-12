@@ -13,34 +13,12 @@
 #define DHEIGHT					TFT_HEIGHT
 
 
-typedef struct {
-	char const *name;
-	uint8_t chapters;
-	uint8_t verses[80];
-}books_t;
 
-static books_t allbooks[] = {
-	{"Nephi 1"},
-	{"Nephi 2"},
-	{"Jacob"},
-	{"Enos"},
-	{"Jarom"},
-	{"Omni"},
-	{"Words of Mormon"},
-	{"Mosiah"},
-	{"Alma"},
-	{"Helaman"},
-	{"Nephi 3"},
-	{"Nephi 4"},
-	{"Mormon"},
-	{"Ether"},
-	{"Moroni"}
-};
+
 
 static const char *fontfiles[FONT_TOTAL] = {
 	UFDIR"10x20.uf",
 	UFDIR"consola24.uf",
-	UFDIR"teutonweiss-bold30.uf",
 	UFDIR"76london38.uf",
 	UFDIR"76london50.uf"
 };
@@ -65,7 +43,7 @@ static _ufont_t *getFont (const int fontIdx)
 	return &fonts[fontIdx];
 }
 
-static void ufont_init ()
+void ufont_init ()
 {
 	// create a 1BPP work surface. this is the initial work surface
 	//surface = fontCreateSurface(DWIDTH, DHEIGHT, COLOUR_24TO16(0xFFBF33), NULL);
@@ -77,8 +55,6 @@ static void ufont_init ()
 		if (fontOpen(font, fontfiles[i])){
 			fontSetDisplayBuffer(font, tft_getBuffer(), DWIDTH, DHEIGHT);
 			fontSetRenderSurface(font, surface);
-			
-			//fontSetGlyphPadding(font, fontGetGlyphPadding(font)+1);
 		}else{
 			printf("font open failed for, %i,  #%s#", i, fontfiles[i]);
 		}
@@ -135,7 +111,7 @@ void enc1SwCB ()
 	static int lastPressTime;
 	
 	int currentPressTime = millis();
-	if (currentPressTime - lastPressTime > 400){
+	if (currentPressTime - lastPressTime > ENCODER_SW_DEBOUNCE){
 		lastPressTime = currentPressTime;
 		dial1.swChange = 1;
 	}
@@ -146,7 +122,7 @@ void enc2SwCB ()
 	static int lastPressTime;
 	
 	int currentPressTime = millis();
-	if (currentPressTime - lastPressTime > 400){
+	if (currentPressTime - lastPressTime > ENCODER_SW_DEBOUNCE){
 		lastPressTime = currentPressTime;
 		dial2.swChange = 1;
 	}
@@ -157,7 +133,7 @@ void enc3SwCB ()
 	static int lastPressTime;
 	
 	int currentPressTime = millis();
-	if (currentPressTime - lastPressTime > 400){
+	if (currentPressTime - lastPressTime > ENCODER_SW_DEBOUNCE){
 		lastPressTime = currentPressTime;
 		dial3.swChange = 1;
 	}
@@ -195,6 +171,37 @@ void pins_init ()
 	attachInterrupt(ENCODER3_PIN_SW, enc3SwCB, FALLING);
 }
 
+
+int drawMainBookHeading (js_t *hJs, const int book, const int chapter, const int verse)
+{
+	int width = 0;
+	int height = 0;
+	int x = 0, y = 0;
+
+
+	char const *title = js_bookTitle(hJs);
+	if (title){
+		_ufont_t *font = getFont(FONT50);
+		fontGetMetrics(font, (uint8_t*)title, &width, &height);
+		x = (abs(TFT_WIDTH - width)/2) - 2;
+		y = 2;
+		fontPrint(font, &x, &y, (uint8_t*)title);
+	}
+	
+	char const *heading = js_bookHeading(hJs);
+	if (!heading) heading = title;
+	if (heading){
+		//fontGetMetrics(&font30, (uint8_t*)heading, &width, &height);
+		x = 4;
+		y += 12;
+
+		_ufont_t *font = getFont(FONT24);
+		fontPrint(font, &x, &y, (uint8_t*)heading);
+	}
+	
+	return 1;
+}
+
 int drawMain (js_t *hJs, const int book, const int chapter, const int verse)
 {
 	int success = 0;
@@ -220,18 +227,6 @@ int drawMain (js_t *hJs, const int book, const int chapter, const int verse)
 		y = height + 32;
 		fontPrint(font, &x, &y, (uint8_t*)title);
 	}
-#if 0
-	char *heading = js_bookHeading(hJs);
-	if (heading){
-		//fontGetMetrics(&font30, (uint8_t*)heading, &width, &height);
-		x = 4;
-		y += height;
-
-		_ufont_t *font = getFont(FONT24);
-		fontPrint(font, &x, &y, (uint8_t*)heading);
-		free(heading);
-	}
-#endif
 
 	_ufont_t *font = getFont(FONT20);
 	sprintf(buffer, "Chapter: %i / %i", chapter, allbooks[book].chapters);
@@ -263,7 +258,10 @@ void sceneStartupDraw (void *opaque)
 {
 	ui_opaque_info *info = (ui_opaque_info*)opaque;
 
-	drawMain(info->hJs, info->book, info->chapter, info->verse);
+	if (info->flagSw1Ctrl)
+		drawMain(info->hJs, info->book, info->chapter, info->verse);
+	else
+		drawMainBookHeading(info->hJs, info->book, info->chapter, info->verse);
 	fontApplySurface(getFont(FONT24), 0, 0);
 }
 
@@ -343,12 +341,14 @@ void sceneStartupEnter (void *opaque)
 				}
 			}
 			js_openBook(info->hJs, allbooks[info->book].name);
+			info->bookHeading = js_bookHeading(info->hJs);
 		}
 	}
 	
 	const uint32_t wrapFlags = BFONT_RENDER_WORDWRAP|BFONT_RENDER_NEWLINE|BFONT_RENDER_NODEFAULT|BFONT_RENDER_ADVANCE_X|BFONT_RENDER_ADVANCE_Y;
 	fontSetRenderFlags(getFont(FONT20), wrapFlags);
 	fontSetRenderFlags(getFont(FONT24), wrapFlags);
+	//fontSetRenderFlags(getFont(FONT30), wrapFlags);
 	//fontSetLineSpace(getFont(FONT24), fontGetLineSpace(getFont(FONT24))+1);
 }
 
@@ -410,16 +410,17 @@ static void *uiSetViewNext ()
 
 static void sceneRender (void *opaque)
 {
-	//set_arm_clock(600*1000*1000);
-	//delay(1);
-	
+	//set_arm_clock(320*1000*1000);
+
 	fontCleanSurface(NULL, surface);
 	tft_clearBuffer(COLOUR_CREAM);
 	uiViewRender(opaque);
+
+	//set_arm_clock(720*1000*1000);
+
 	tft_update();
 	
-	//delay(1);
-	//set_arm_clock(84*1000*1000);
+	//set_arm_clock(160*1000*1000);
 }
 
 static int uiDispatchMessage (const int eventId, uint32_t data1Uint32, int32_t data2Int32, float data3Flt)
@@ -442,9 +443,13 @@ int startupEnc1Change (void *opaque, const int direction)
 
 	js_closeBook(info->hJs);
 	js_openBook(info->hJs, allbooks[info->book].name);
+	
+	
+	info->bookHeading = js_bookHeading(info->hJs);
 	info->chapter = 1;
 	info->verse = 1;
-
+	info->flagSw1Ctrl = 1;
+	
 	return 1;
 }
 
@@ -460,6 +465,7 @@ int startupEnc2Change (void *opaque, const int direction)
 		if (chapter <= allbooks[info->book].chapters)
 			info->chapter = chapter;
 	}
+	info->verse = 1;
 	return 1;
 }
 
@@ -483,8 +489,8 @@ void startupSw1Change (void *opaque, const int direction)
 	ui_opaque_info *info = (ui_opaque_info*)uiGetOpaque(UI_PAGE_STARTUP);
 		
 
-	if (++info->flagSw1Ctrl > 3)
-		info->flagSw1Ctrl = 1;
+	info->flagSw1Ctrl++;
+	info->flagSw1Ctrl &= 0x01;
 }
 
 int uiEventCB (const int eventId, void *opaque, uint32_t data1uint32, int32_t data2Int32, float data3Flt)
@@ -506,7 +512,7 @@ int uiEventCB (const int eventId, void *opaque, uint32_t data1uint32, int32_t da
 			/*uiDispatchMessage(UI_EVENT_PAGE_EXT, 0, 0, 0.0f);
 			uiDispatchMessage(UI_EVENT_PAGE_NXT, 0, 0, 0.0f);
 			uiDispatchMessage(UI_EVENT_PAGE_ENT, 0, 0, 0.0f);*/
-			//startupSw1Change(opaque, data3Flt);
+			startupSw1Change(opaque, data3Flt);
 	    	return 1;
 	    }
 		break;
@@ -543,10 +549,10 @@ static void ui_init ()
 
 void setup ()
 {
-	//Serial.begin(2000000);
+	Serial.begin(2000000);
 	//while (!Serial); // wait for Arduino Serial Monitor
 	
-	//set_arm_clock(600*1000*1000);
+	set_arm_clock(360*1000*1000);
 	tft_init();
 	sd_init();
 	ufont_init();

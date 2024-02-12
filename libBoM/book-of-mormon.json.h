@@ -2,11 +2,38 @@
 #ifndef _BOOK_OF_MORMON_JSON_H_
 #define _BOOK_OF_MORMON_JSON_H_
 
-/*
+
 #ifndef ARDUINO
-#define FLASHMEM
+#define PROGMEM
 #endif
-*/
+
+
+typedef struct {
+	char const *name;
+	uint8_t chapters;
+	uint8_t verses[80];
+}books_t;
+
+
+static books_t allbooks[] = {
+	{"Nephi 1"},
+	{"Nephi 2"},
+	{"Jacob"},
+	{"Enos"},
+	{"Jarom"},
+	{"Omni"},
+	{"Words of Mormon"},
+	{"Mosiah"},
+	{"Alma"},
+	{"Helaman"},
+	{"Nephi 3"},
+	{"Nephi 4"},
+	{"Mormon"},
+	{"Ether"},
+	{"Moroni"}
+};
+
+
 static PROGMEM char json_Book[] = " \
 {\
     \"books\": [\

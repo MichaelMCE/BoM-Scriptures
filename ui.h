@@ -28,6 +28,8 @@
 #define ENCODER3_PIN_DT			6
 #define ENCODER3_PIN_SW			7
 
+#define ENCODER_SW_DEBOUNCE		350
+
 
 enum _uiEvents {
 	UI_EVENT_ROTARY = 1,		// dataInt32=which, dataFlt=direction
@@ -48,7 +50,6 @@ enum _uiPages {
 enum _fonts {
 	FONT20,
 	FONT24,
-	FONT30,
 	FONT38,
 	FONT50,
 	FONT_TOTAL
@@ -75,16 +76,8 @@ typedef struct {
 	int book;
 	
 	int flagSw1Ctrl;
+	char const *bookHeading;
 }ui_opaque_info;
-
-typedef struct {
-	uint32_t requestCt;
-	
-	int16_t presetIdx;
-	int16_t stub;
-	
-	volatile int32_t deviceReady;
-}ui_opaque_c4;
 
 
 typedef struct {

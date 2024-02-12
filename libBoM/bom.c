@@ -431,21 +431,16 @@ char const *js_bookTitle (js_t *hJs)
 
 char const *js_bookHeading (js_t *hJs)
 {
-	//printf("--- js_bookHeading\n");
-	
 	json_t const *child;
 	
-	for (child = json_getChild(hJs->book); child != NULL; child = json_getSibling(child)){
+	for (child = json_getChild(hJs->json); child != NULL; child = json_getSibling(child)){
 		jsonType_t propertyType = json_getType(child);
 		//js_processType(child, propertyType);
 
 		if (propertyType == JSON_TEXT){
 			char const *name = json_getName(child);
-			//printf("name #%s#\n", name);
-			
 			if (!strcmp("heading", name)){
 				char const *value = json_getValue(child);
-				//if (value) return strdup(value);
 				return value;
 			}
 		}
@@ -455,8 +450,6 @@ char const *js_bookHeading (js_t *hJs)
 
 json_t const *js_openChapter (js_t *hJs, const uint32_t chapterNo)
 {
-	//printf("--- js_openChapter %i\n", chapterNo);
-	
 	json_t const *child;
 	
 	for (child = json_getChild(hJs->json); child != NULL; child = json_getSibling(child)){
@@ -504,8 +497,6 @@ json_t const *js_openChapter (js_t *hJs, const uint32_t chapterNo)
 
 json_t const *js_openVerse (js_t *hJs, const uint32_t verseNo)
 {
-	//printf("@@@ js_openVerse %i\n", verseNo);
-	
 	json_t const *child;
 	
 	for (child = json_getChild(hJs->json); child != NULL; child = json_getSibling(child)){
