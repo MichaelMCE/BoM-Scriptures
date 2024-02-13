@@ -448,7 +448,7 @@ int startupEnc1Change (void *opaque, const int direction)
 	info->bookHeading = js_bookHeading(info->hJs);
 	info->chapter = 1;
 	info->verse = 1;
-	info->flagSw1Ctrl = 1;
+	//info->flagSw1Ctrl = 1;
 	
 	return 1;
 }
